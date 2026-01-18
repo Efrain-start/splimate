@@ -1,0 +1,169 @@
+// src/app/groupsApi.js
+import { db } from "../firebase";
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  onSnapshot,
+  query,
+  orderBy,
+  doc,
+  updateDoc,
+  arrayUnion,
+  arrayRemove,
+  deleteDoc,
+  getDoc,
+} from "firebase/firestore";
+
+// Colección principal
+const groupsCol = collection(db, "groups");
+
+// Escuchar grupos en tiempo real
+export function listenGroups(callback) {
+  const q = query(groupsCol, orderBy("createdAt", "desc"));
+
+  const unsub = onSnapshot(q, (snap) => {
+    const groups = snap.docs.map((d) => {
+      const data = d.data();
+      return {
+        id: d.id,
+        ...data,
+        members: Array.isArray(data.members) ? data.members : [],
+        expenses: Array.isArray(data.expenses) ? data.expenses : [],
+        isSettled: !!data.isSettled,
+        type: data.type ?? "other",
+      };
+    });
+
+    callback(groups);
+  });
+
+  return unsub;
+}
+
+// Crear un grupo nuevo
+export async function createGroup({ name, type = "other" }) {
+  const cleanName = (name || "").trim();
+  if (!cleanName) throw new Error("Nombre de grupo vacío");
+
+  const docRef = await addDoc(groupsCol, {
+    name: cleanName,
+    type,
+    createdAt: serverTimestamp(),
+    members: [],
+    expenses: [],
+    isSettled: false,
+  });
+
+  return docRef.id;
+}
+
+// =========================
+// MEMBERS
+// =========================
+
+// Agregar miembro
+export async function addMember(groupId, memberName) {
+  const clean = (memberName || "").trim();
+  if (!clean) return;
+
+  const ref = doc(db, "groups", groupId);
+  await updateDoc(ref, {
+    members: arrayUnion(clean),
+  });
+}
+
+// Quitar miembro
+export async function removeMember(groupId, memberName) {
+  const clean = (memberName || "").trim();
+  if (!clean) return;
+
+  const ref = doc(db, "groups", groupId);
+  await updateDoc(ref, {
+    members: arrayRemove(clean),
+  });
+}
+
+// =========================
+// EXPENSES
+// =========================
+
+export async function addExpense(groupId, expense) {
+  const description = (expense?.description || "").trim();
+  const paidBy = (expense?.paidBy || "").trim();
+  const splitBetween = Array.isArray(expense?.splitBetween)
+    ? expense.splitBetween
+    : [];
+
+  const amountNum = Number(expense?.amount);
+
+  if (!description) throw new Error("Descripción vacía");
+  if (!paidBy) throw new Error("Falta quién pagó");
+  if (!Number.isFinite(amountNum) || amountNum <= 0)
+    throw new Error("Monto inválido");
+  if (splitBetween.length === 0) throw new Error("Split vacío");
+
+  const ref = doc(db, "groups", groupId);
+
+  const payload = {
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    description,
+    amount: amountNum,
+    paidBy,
+    splitBetween,
+    createdAt: new Date().toISOString(), // ✅ para que sea consistente
+  };
+
+  await updateDoc(ref, {
+    expenses: arrayUnion(payload),
+  });
+
+  return payload.id;
+}
+
+/**
+ * ✅ Importante:
+ * No usamos arrayRemove(expenseObj) porque tiene que ser EXACTAMENTE igual al objeto guardado,
+ * y a veces cambia el shape o falta algún campo.
+ * Mejor borramos por ID (seguro).
+ */
+export async function removeExpense(groupId, expenseOrId) {
+  const expenseId =
+    typeof expenseOrId === "string" ? expenseOrId : expenseOrId?.id;
+
+  if (!expenseId) throw new Error("Falta expenseId");
+
+  const ref = doc(db, "groups", groupId);
+  const snap = await getDoc(ref);
+
+  if (!snap.exists()) throw new Error("Grupo no existe");
+
+  const data = snap.data();
+  const prev = Array.isArray(data.expenses) ? data.expenses : [];
+  const next = prev.filter((e) => String(e?.id) !== String(expenseId));
+
+  await updateDoc(ref, { expenses: next });
+}
+
+// =========================
+// SETTLE / REOPEN
+// =========================
+
+export async function settleGroupFS(groupId) {
+  const ref = doc(db, "groups", groupId);
+  await updateDoc(ref, { isSettled: true });
+}
+
+export async function reopenGroupFS(groupId) {
+  const ref = doc(db, "groups", groupId);
+  await updateDoc(ref, { isSettled: false });
+}
+
+// =========================
+// DELETE GROUP
+// =========================
+
+export async function deleteGroup(groupId) {
+  const ref = doc(db, "groups", groupId);
+  await deleteDoc(ref);
+}

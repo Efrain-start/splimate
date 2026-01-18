@@ -40,3 +40,89 @@
 .read-the-docs {
   color: #888;
 }
+
+.topbar{
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  margin: 12px;
+  background: rgba(17, 24, 39, 0.55);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.30);
+  backdrop-filter: blur(8px);
+}
+
+.brand{
+  text-decoration: none;
+  font-weight: 900;
+  letter-spacing: 0.3px;
+  color: #E5E7EB;
+}
+
+.nav{
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.navLink{
+  text-decoration: none;
+  color: #E5E7EB;
+  font-weight: 800;
+  opacity: 0.9;
+}
+
+.navLink:hover{
+  opacity: 1;
+}
+
+.menuBtn{
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.25);
+  color: #E5E7EB;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.topbar{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(17, 24, 39, 0.55);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.30);
+  backdrop-filter: blur(8px);
+  color: #E5E7EB;
+}
+
+.brand{
+  font-weight: 900;
+  letter-spacing: 0.2px;
+}
+
+.nav{
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.navLink{
+  text-decoration: none;
+  color: #E5E7EB;
+  font-weight: 800;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.06);
+}

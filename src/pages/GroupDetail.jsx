@@ -1,20 +1,18 @@
-import {
-  calculateBalances,
-  settleBalances,
-  formatMoney,
-} from "../utils/balances";
+// src/pages/GroupDetail.jsx
+import { calculateBalances, settleBalances, formatMoney } from "../utils/balances";
 import { useParams, useNavigate } from "react-router-dom";
-import { useSelector, useDispatch } from "react-redux";
+import { useSelector } from "react-redux";
 import { useState, useEffect } from "react";
+
 import {
-  addMemberToGroup,
-  removeMemberFromGroup,
-  addExpenseToGroup,
-  removeExpenseFromGroup,
-  settleGroup,
-  reopenGroup,
-  removeGroup,
-} from "../features/groups/groupsSlice";
+  addMember,
+  removeMember,
+  deleteGroup,
+  addExpense,
+  removeExpense,
+  settleGroupFS,
+  reopenGroupFS,
+} from "../app/groupsApi";
 
 const badgeStyle = (balance) => ({
   display: "inline-flex",
@@ -35,21 +33,31 @@ const badgeStyle = (balance) => ({
   boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
 });
 
+const inviteBtn = {
+  padding: "8px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.2)",
+  background: "rgba(255,255,255,0.08)",
+  color: "#E5E7EB",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
 const TYPE_THEME = {
   trip: {
-    gradient: "linear-gradient(135deg, #BAE6FD, #E0F2FE)", // blue 200 → 100
+    gradient: "linear-gradient(135deg, #BAE6FD, #E0F2FE)",
     soft: "rgba(186,230,253,0.08)",
   },
   home: {
-    gradient: "linear-gradient(135deg, #BBF7D0, #DCFCE7)", // green 200 → 100
+    gradient: "linear-gradient(135deg, #BBF7D0, #DCFCE7)",
     soft: "rgba(187,247,208,0.08)",
   },
   couple: {
-    gradient: "linear-gradient(135deg, #FBCFE8, #FCE7F3)", // pink 200 → 100
+    gradient: "linear-gradient(135deg, #FBCFE8, #FCE7F3)",
     soft: "rgba(251,207,232,0.08)",
   },
   other: {
-    gradient: "linear-gradient(135deg, #E2E8F0, #F1F5F9)", // slate 200 → 100
+    gradient: "linear-gradient(135deg, #E2E8F0, #F1F5F9)",
     soft: "rgba(226,232,240,0.08)",
   },
 };
@@ -70,7 +78,6 @@ const TYPE_BG = {
 
 export default function GroupDetail() {
   const { id } = useParams();
-  const dispatch = useDispatch();
   const navigate = useNavigate();
 
   const group = useSelector((state) =>
@@ -85,164 +92,53 @@ export default function GroupDetail() {
   const [amount, setAmount] = useState("");
   const [paidBy, setPaidBy] = useState("");
   const [splitBetween, setSplitBetween] = useState([]);
-  const [mounted, setMounted] = useState(false);
 
+  // UI anim
+  const [mounted, setMounted] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setMounted(true), 500);
+    const t = setTimeout(() => setMounted(true), 250);
     return () => clearTimeout(t);
   }, []);
 
-  if (!group) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          padding: 20,
-          background: `
-      radial-gradient(900px 500px at 10% 0%, rgba(99,102,241,0.20), transparent),
-      radial-gradient(700px 400px at 90% 20%, rgba(34,197,94,0.18), transparent),
-      #0F172A
-    `,
-          color: "#E5E7EB",
-        }}
-      >
-        <h1>Group Detail</h1>
-        <p>No encontré ese grupo (ID: {id})</p>
-        <div style={{ marginTop: 16 }}>
-          <button onClick={() => navigate("/")} style={btn("ghost", false)}>
-            ← Volver a Home
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Helpers UI
+  const btn = (variant = "primary", disabled = false) => {
+    const variants = {
+      primary: {
+        bg: "linear-gradient(135deg, rgba(99,102,241,0.95), rgba(124,58,237,0.95))",
+        text: "#fff",
+        border: "rgba(255,255,255,0.18)",
+      },
+      danger: {
+        bg: "linear-gradient(135deg, rgba(239,68,68,0.95), rgba(220,38,38,0.95))",
+        text: "#fff",
+        border: "rgba(255,255,255,0.18)",
+      },
+      warning: {
+        bg: "linear-gradient(135deg, rgba(245,158,11,0.95), rgba(217,119,6,0.95))",
+        text: "#111827",
+        border: "rgba(255,255,255,0.22)",
+      },
+      ghost: {
+        bg: "rgba(255,255,255,0.08)",
+        text: "#E5E7EB",
+        border: "rgba(255,255,255,0.14)",
+      },
+    };
 
-  const theme = TYPE_THEME?.[group?.type] ?? TYPE_THEME.other;
-  const typeMeta = TYPE_META?.[group?.type] ?? TYPE_META.other;
-  const bgIcon = TYPE_BG?.[group?.type] ?? TYPE_BG.other;
+    const v = variants[variant] ?? variants.primary;
 
-  const members = group.members ?? [];
-  const expenses = group.expenses ?? [];
-  const balances = calculateBalances(group);
-  const settlements = settleBalances(balances);
-  const isSettled = !!group.isSettled;
-
-  const handleSettle = () => {
-    if (isSettled) return;
-
-    const ok = confirm(
-      "¿Seguro que quieres liquidar este grupo? Ya NO podrás agregar nuevos gastos."
-    );
-    if (!ok) return;
-
-    dispatch(settleGroup({ groupId: id }));
-  };
-
-  const handleReopen = () => {
-    if (!isSettled) return;
-
-    const ok = confirm("¿Reabrir este grupo? Podrás volver a agregar gastos.");
-    if (!ok) return;
-
-    dispatch(reopenGroup({ groupId: id }));
-
-    setDesc("");
-    setAmount("");
-    setPaidBy("");
-    setSplitBetween([]);
-  };
-
-  const handleDeleteGroup = () => {
-    if (!isSettled) return;
-
-    const ok = confirm(
-      `¿Eliminar el grupo "${group.name}"? Esta acción no se puede deshacer.`
-    );
-    if (!ok) return;
-
-    dispatch(removeGroup({ groupId: id }));
-    navigate("/");
-  };
-
-  // --- MEMBERS ---
-  const handleAddMember = () => {
-    const name = memberName.trim();
-    if (!name) return;
-    dispatch(addMemberToGroup({ groupId: id, memberName: name }));
-    setMemberName("");
-  };
-
-  // Si borras un miembro, también lo quitamos de splitBetween y paidBy (si aplica)
-  const handleRemoveMember = (m) => {
-    dispatch(removeMemberFromGroup({ groupId: id, memberName: m }));
-    setSplitBetween((prev) => prev.filter((x) => x !== m));
-    setPaidBy((prev) => (prev === m ? "" : prev));
-  };
-
-  // --- EXPENSES ---
-  const toggleSplit = (m) => {
-    setSplitBetween((prev) =>
-      prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]
-    );
-  };
-
-  const handleAddExpense = () => {
-    dispatch(
-      addExpenseToGroup({
-        groupId: id,
-        description: desc,
-        amount,
-        paidBy,
-        splitBetween,
-      })
-    );
-
-    // limpiar form
-    setDesc("");
-    setAmount("");
-    setPaidBy("");
-    setSplitBetween([]);
-  };
-
-  const canAddExpense =
-    desc.trim() &&
-    Number(amount) > 0 &&
-    paidBy &&
-    splitBetween.length > 0 &&
-    !isSettled;
-
-  const totalSpent = expenses.reduce(
-    (sum, e) => sum + (Number(e.amount) || 0),
-    0
-  );
-  const totalMembers = members.length;
-  const totalExpenses = expenses.length;
-
-  const balancesSorted = Object.entries(balances).sort((a, b) => {
-    const va = Number(a[1]) || 0;
-    const vb = Number(b[1]) || 0;
-
-    // Deudores (negativos) primero, luego acreedores (positivos), luego ceros
-    const rank = (v) => (v < 0 ? 0 : v > 0 ? 1 : 2);
-
-    const ra = rank(va);
-    const rb = rank(vb);
-
-    if (ra !== rb) return ra - rb;
-
-    // Dentro de cada grupo, ordenar por magnitud (más grande primero)
-    return Math.abs(vb) - Math.abs(va);
-  });
-
-  const statPill = {
-    padding: "8px 12px",
-    borderRadius: 12,
-    background: "rgba(255,255,255,0.10)",
-    border: "1px solid rgba(255,255,255,0.14)",
-    color: "#E5E7EB",
-    fontWeight: 800,
-    letterSpacing: 0.2,
-    backdropFilter: "blur(6px)",
+    return {
+      padding: "10px 12px",
+      borderRadius: 12,
+      border: `1px solid ${v.border}`,
+      background: disabled ? "rgba(255,255,255,0.08)" : v.bg,
+      color: disabled ? "rgba(229,231,235,0.55)" : v.text,
+      fontWeight: 900,
+      cursor: disabled ? "not-allowed" : "pointer",
+      boxShadow: disabled ? "none" : "0 10px 22px rgba(0,0,0,0.28)",
+      transition: "transform .08s ease, filter .12s ease",
+      userSelect: "none",
+    };
   };
 
   const card = {
@@ -288,55 +184,178 @@ export default function GroupDetail() {
     boxShadow: "0 12px 30px rgba(0,0,0,0.30)",
   };
 
-  const btn = (variant = "primary", disabled = false) => {
-    const variants = {
-      primary: {
-        bg: "linear-gradient(135deg, rgba(99,102,241,0.95), rgba(124,58,237,0.95))",
-        text: "#fff",
-        border: "rgba(255,255,255,0.18)",
-      },
-      danger: {
-        bg: "linear-gradient(135deg, rgba(239,68,68,0.95), rgba(220,38,38,0.95))",
-        text: "#fff",
-        border: "rgba(255,255,255,0.18)",
-      },
-      warning: {
-        bg: "linear-gradient(135deg, rgba(245,158,11,0.95), rgba(217,119,6,0.95))",
-        text: "#111827",
-        border: "rgba(255,255,255,0.22)",
-      },
-      ghost: {
-        bg: "rgba(255,255,255,0.08)",
-        text: "#E5E7EB",
-        border: "rgba(255,255,255,0.14)",
-      },
-    };
+  if (!group) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          padding: 20,
+          background: `
+            radial-gradient(900px 500px at 10% 0%, rgba(99,102,241,0.20), transparent),
+            radial-gradient(700px 400px at 90% 20%, rgba(34,197,94,0.18), transparent),
+            #0F172A
+          `,
+          color: "#E5E7EB",
+        }}
+      >
+        <h1>Group Detail</h1>
+        <p>No encontré ese grupo (ID: {id})</p>
+        <div style={{ marginTop: 16 }}>
+          <button onClick={() => navigate("/")} style={btn("ghost", false)}>
+            ← Volver a Home
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-    const v = variants[variant] ?? variants.primary;
+  const theme = TYPE_THEME?.[group?.type] ?? TYPE_THEME.other;
+  const typeMeta = TYPE_META?.[group?.type] ?? TYPE_META.other;
+  const bgIcon = TYPE_BG?.[group?.type] ?? TYPE_BG.other;
 
-    return {
-      padding: "10px 12px",
-      borderRadius: 12,
-      border: `1px solid ${v.border}`,
-      background: disabled ? "rgba(255,255,255,0.08)" : v.bg,
-      color: disabled ? "rgba(229,231,235,0.55)" : v.text,
-      fontWeight: 900,
-      cursor: disabled ? "not-allowed" : "pointer",
-      boxShadow: disabled ? "none" : "0 10px 22px rgba(0,0,0,0.28)",
-      transition: "transform .08s ease, filter .12s ease",
-      userSelect: "none",
-    };
+  const members = group.members ?? [];
+  const expenses = group.expenses ?? [];
+
+  const balances = calculateBalances(group);
+  const settlements = settleBalances(balances);
+
+  const isSettled = !!group.isSettled;
+
+  const totalSpent = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  const totalMembers = members.length;
+  const totalExpenses = expenses.length;
+
+  const balancesSorted = Object.entries(balances).sort((a, b) => {
+    const va = Number(a[1]) || 0;
+    const vb = Number(b[1]) || 0;
+
+    const rank = (v) => (v < 0 ? 0 : v > 0 ? 1 : 2);
+
+    const ra = rank(va);
+    const rb = rank(vb);
+
+    if (ra !== rb) return ra - rb;
+    return Math.abs(vb) - Math.abs(va);
+  });
+
+  // ===== Firestore Actions =====
+
+  const handleAddMember = async () => {
+    const name = (memberName || "").trim();
+    if (!name) return;
+
+    try {
+      await addMember(id, name);
+      setMemberName("");
+    } catch (e) {
+      console.error(e);
+      alert("No se pudo agregar el miembro. Revisa consola.");
+    }
+  };
+
+  const handleRemoveMember = async (m) => {
+    try {
+      await removeMember(id, m);
+      setSplitBetween((prev) => prev.filter((x) => x !== m));
+      setPaidBy((prev) => (prev === m ? "" : prev));
+    } catch (e) {
+      console.error(e);
+      alert("No se pudo eliminar el miembro. Revisa consola.");
+    }
+  };
+
+  const toggleSplit = (m) => {
+    setSplitBetween((prev) =>
+      prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]
+    );
+  };
+
+  const canAddExpense =
+    desc.trim() &&
+    Number(amount) > 0 &&
+    paidBy &&
+    splitBetween.length > 0 &&
+    !isSettled;
+
+  const handleAddExpense = async () => {
+    try {
+      await addExpense(id, {
+        description: desc,
+        amount,
+        paidBy,
+        splitBetween,
+      });
+
+      setDesc("");
+      setAmount("");
+      setPaidBy("");
+      setSplitBetween([]);
+    } catch (e) {
+      console.error(e);
+      alert("No se pudo agregar el gasto. Revisa consola.");
+    }
+  };
+
+  const handleDeleteExpense = async (expenseId) => {
+    try {
+      await removeExpense(id, expenseId);
+    } catch (e) {
+      console.error(e);
+      alert("No se pudo eliminar el gasto. Revisa consola.");
+    }
+  };
+
+  const handleSettle = async () => {
+    if (isSettled) return;
+
+    const ok = confirm(
+      "¿Seguro que quieres liquidar este grupo? Ya NO podrás agregar nuevos gastos."
+    );
+    if (!ok) return;
+
+    try {
+      await settleGroupFS(id);
+    } catch (e) {
+      console.error(e);
+      alert("No se pudo liquidar. Revisa consola.");
+    }
+  };
+
+  const handleReopen = async () => {
+    if (!isSettled) return;
+
+    const ok = confirm("¿Reabrir este grupo? Podrás volver a agregar gastos.");
+    if (!ok) return;
+
+    try {
+      await reopenGroupFS(id);
+      setDesc("");
+      setAmount("");
+      setPaidBy("");
+      setSplitBetween([]);
+    } catch (e) {
+      console.error(e);
+      alert("No se pudo reabrir. Revisa consola.");
+    }
+  };
+
+  const handleDeleteGroup = async () => {
+    const ok = confirm(
+      `¿Eliminar el grupo "${group.name}"? Esta acción no se puede deshacer.`
+    );
+    if (!ok) return;
+
+    try {
+      await deleteGroup(id);
+      navigate("/");
+    } catch (e) {
+      console.error(e);
+      alert("No se pudo eliminar el grupo. Revisa consola.");
+    }
   };
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        padding: 20,
-        color: "#E5E7EB",
-      }}
-    >
-      {/* ✅ WRAPPER de animación */}
+    <div style={{ minHeight: "100vh", padding: 20, color: "#E5E7EB" }}>
       <div
         style={{
           opacity: mounted ? 1 : 0,
@@ -355,7 +374,6 @@ export default function GroupDetail() {
             border: "1px solid rgba(255,255,255,0.14)",
           }}
         >
-          {/* watermark según tipo */}
           <div
             aria-hidden="true"
             style={{
@@ -372,49 +390,40 @@ export default function GroupDetail() {
             {bgIcon}
           </div>
 
-          {/* contenido encima */}
           <div style={{ position: "relative", zIndex: 1 }}>
-            <h1>Group Detail</h1>
+            <h1 style={{ margin: 0 }}>Group Detail</h1>
 
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 14,
-                marginTop: 10,
-              }}
-            >
-              <div
-                style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: 16,
-                  display: "grid",
-                  placeItems: "center",
-                  fontSize: 28,
-                  background: "rgba(255,255,255,0.08)",
-                  border: "1px solid rgba(255,255,255,0.12)",
+            <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+              <button
+                style={inviteBtn}
+                onClick={() => {
+                  const link = window.location.href;
+                  navigator.clipboard.writeText(link);
+                  alert("Link copiado 🔗\nCompártelo con tus amigos");
                 }}
               >
-                {typeMeta.icon}
-              </div>
+                🔗 Invitar
+              </button>
 
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 12, opacity: 0.7 }}>
-                  {typeMeta.label}
-                </div>
-                <div style={{ fontSize: 22, fontWeight: 900 }}>
-                  {group.name}
-                </div>
+              <div
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 999,
+                  border: "1px solid rgba(255,255,255,0.14)",
+                  background: theme.soft,
+                  fontWeight: 800,
+                }}
+              >
+                {typeMeta.icon} {typeMeta.label}
               </div>
 
               {isSettled && (
                 <span
                   style={{
-                    padding: "4px 10px",
+                    padding: "8px 12px",
                     borderRadius: 999,
                     fontSize: 12,
-                    fontWeight: 800,
+                    fontWeight: 900,
                     background: "rgba(245,158,11,0.18)",
                     border: "1px solid rgba(255,255,255,0.14)",
                     color: "#FBBF24",
@@ -425,31 +434,57 @@ export default function GroupDetail() {
                 </span>
               )}
             </div>
+
+            <div style={{ marginTop: 12, fontSize: 22, fontWeight: 900 }}>
+              {group.name}
+            </div>
           </div>
         </div>
 
         {/* STATS */}
-        <div
-          style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}
-        >
-          <span style={statPill}>
-            <strong>Miembros:</strong> {totalMembers}
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 10 }}>
+          <span
+            style={{
+              padding: "8px 12px",
+              borderRadius: 12,
+              background: "rgba(255,255,255,0.10)",
+              border: "1px solid rgba(255,255,255,0.14)",
+              fontWeight: 800,
+            }}
+          >
+            Miembros: {totalMembers}
           </span>
 
-          <span style={statPill}>
-            <strong>Gastos:</strong> {totalExpenses}
+          <span
+            style={{
+              padding: "8px 12px",
+              borderRadius: 12,
+              background: "rgba(255,255,255,0.10)",
+              border: "1px solid rgba(255,255,255,0.14)",
+              fontWeight: 800,
+            }}
+          >
+            Gastos: {totalExpenses}
           </span>
 
-          <span style={statPill}>
-            <strong>Total:</strong> {formatMoney(totalSpent)}
+          <span
+            style={{
+              padding: "8px 12px",
+              borderRadius: 12,
+              background: "rgba(255,255,255,0.10)",
+              border: "1px solid rgba(255,255,255,0.14)",
+              fontWeight: 800,
+            }}
+          >
+            Total: {formatMoney(totalSpent)}
           </span>
         </div>
 
-        <hr />
+        <hr style={{ margin: "18px 0", opacity: 0.2 }} />
 
         {/* MEMBERS */}
         <div style={card}>
-          <h2>Members: {members.length}</h2>
+          <h2 style={{ marginTop: 0 }}>Members: {members.length}</h2>
 
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <input
@@ -460,16 +495,12 @@ export default function GroupDetail() {
               disabled={isSettled}
             />
 
-            <button
-              onClick={handleAddMember}
-              disabled={isSettled}
-              style={btn("primary", isSettled)}
-            >
+            <button onClick={handleAddMember} disabled={isSettled} style={btn("primary", isSettled)}>
               Agregar miembro
             </button>
           </div>
 
-          <ul>
+          <ul style={{ marginTop: 12 }}>
             {members.map((m) => (
               <li
                 key={m}
@@ -494,11 +525,11 @@ export default function GroupDetail() {
           </ul>
         </div>
 
-        <hr />
+        <hr style={{ margin: "18px 0", opacity: 0.2 }} />
 
         {/* EXPENSES */}
         <div style={card}>
-          <h2>Gastos: {expenses.length}</h2>
+          <h2 style={{ marginTop: 0 }}>Gastos: {expenses.length}</h2>
 
           {isSettled && (
             <div
@@ -520,14 +551,7 @@ export default function GroupDetail() {
             <p>Primero agrega miembros para poder registrar gastos.</p>
           ) : (
             <>
-              <div
-                style={{
-                  display: "grid",
-                  gap: 8,
-                  maxWidth: 520,
-                  marginTop: 10,
-                }}
-              >
+              <div style={{ display: "grid", gap: 8, maxWidth: 520, marginTop: 10 }}>
                 <input
                   value={desc}
                   onChange={(e) => setDesc(e.target.value)}
@@ -579,17 +603,11 @@ export default function GroupDetail() {
                   </div>
                 </div>
 
-                <button
-                  onClick={handleAddExpense}
-                  disabled={!canAddExpense}
-                  style={btn("primary", !canAddExpense)}
-                >
+                <button onClick={handleAddExpense} disabled={!canAddExpense} style={btn("primary", !canAddExpense)}>
                   Agregar gasto
                 </button>
 
-                {!canAddExpense && (
-                  <p style={hint}>Completa todo para agregar un gasto.</p>
-                )}
+                {!canAddExpense && <p style={hint}>Completa todo para agregar un gasto.</p>}
               </div>
 
               <div style={{ marginTop: 14 }} />
@@ -600,24 +618,11 @@ export default function GroupDetail() {
                 <div style={{ display: "grid", gap: 10, marginTop: 8 }}>
                   {expenses.map((e) => (
                     <div key={e.id} style={expenseCard}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: 12,
-                        }}
-                      >
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                         <div>
                           <div style={{ fontWeight: 900 }}>{e.description}</div>
-                          <div
-                            style={{
-                              fontSize: 12,
-                              color: "rgba(229,231,235,0.70)",
-                              marginTop: 2,
-                            }}
-                          >
-                            Pagó: <strong>{e.paidBy}</strong> · Split:{" "}
-                            {(e.splitBetween ?? []).join(", ")}
+                          <div style={{ fontSize: 12, color: "rgba(229,231,235,0.70)", marginTop: 2 }}>
+                            Pagó: <strong>{e.paidBy}</strong> · Split: {(e.splitBetween ?? []).join(", ")}
                           </div>
                         </div>
 
@@ -627,19 +632,9 @@ export default function GroupDetail() {
                           </div>
 
                           <button
-                            onClick={() =>
-                              dispatch(
-                                removeExpenseFromGroup({
-                                  groupId: id,
-                                  expenseId: e.id,
-                                })
-                              )
-                            }
+                            onClick={() => handleDeleteExpense(e.id)}
                             disabled={isSettled}
-                            style={{
-                              ...btn("danger", isSettled),
-                              marginTop: 6,
-                            }}
+                            style={{ ...btn("danger", isSettled), marginTop: 6 }}
                           >
                             Eliminar
                           </button>
@@ -653,13 +648,13 @@ export default function GroupDetail() {
           )}
         </div>
 
-        <hr />
+        <hr style={{ margin: "18px 0", opacity: 0.2 }} />
 
         {/* BALANCES */}
         <div style={card}>
-          <h2>Balances</h2>
+          <h2 style={{ marginTop: 0 }}>Balances</h2>
 
-          <ul>
+          <ul style={{ marginTop: 10 }}>
             {balancesSorted.map(([name, balance]) => (
               <li key={name} style={{ marginBottom: 8 }}>
                 <strong>{name}</strong>
@@ -676,20 +671,8 @@ export default function GroupDetail() {
         </div>
 
         {/* BUTTONS */}
-        <div
-          style={{
-            marginTop: 24,
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            alignItems: "flex-start",
-          }}
-        >
-          <button
-            onClick={handleSettle}
-            disabled={isSettled}
-            style={btn("warning", isSettled)}
-          >
+        <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
+          <button onClick={handleSettle} disabled={isSettled} style={btn("warning", isSettled)}>
             {isSettled ? "Grupo liquidado ✅" : "✅ Liquidar grupo"}
           </button>
 
@@ -699,17 +682,13 @@ export default function GroupDetail() {
             </button>
           )}
 
-          {isSettled && (
-            <div style={{ marginBottom: 24 }}>
-              <button onClick={handleDeleteGroup} style={btn("danger", false)}>
-                🗑️ Eliminar grupo
-              </button>
-            </div>
-          )}
+          <button onClick={handleDeleteGroup} style={btn("danger", false)}>
+            🗑️ Eliminar grupo
+          </button>
         </div>
 
-        <div style={card}>
-          <h2>Pagos sugeridos</h2>
+        <div style={{ ...card, marginTop: 18 }}>
+          <h2 style={{ marginTop: 0 }}>Pagos sugeridos</h2>
 
           {settlements.length === 0 ? (
             <p>Todo está balanceado ✅</p>
@@ -717,21 +696,14 @@ export default function GroupDetail() {
             <ul>
               {settlements.map((p, idx) => (
                 <li key={idx}>
-                  <strong>{p.from}</strong> paga{" "}
-                  <strong>{formatMoney(p.amount)}</strong> a{" "}
-                  <strong>{p.to}</strong>
+                  <strong>{p.from}</strong> paga <strong>{formatMoney(p.amount)}</strong> a <strong>{p.to}</strong>
                 </li>
               ))}
             </ul>
           )}
         </div>
-        <div
-          style={{
-            marginTop: 24,
-            display: "flex",
-            justifyContent: "center",
-          }}
-        >
+
+        <div style={{ marginTop: 24, display: "flex", justifyContent: "center" }}>
           <button onClick={() => navigate("/")} style={btn("ghost", false)}>
             ← Volver a Home
           </button>
