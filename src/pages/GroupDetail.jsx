@@ -1,5 +1,9 @@
 // src/pages/GroupDetail.jsx
-import { calculateBalances, settleBalances, formatMoney } from "../utils/balances";
+import {
+  calculateBalances,
+  settleBalances,
+  formatMoney,
+} from "../utils/balances";
 import { useParams, useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { useState, useEffect } from "react";
@@ -26,8 +30,8 @@ const badgeStyle = (balance) => ({
     balance > 0
       ? "linear-gradient(135deg, #E8FFF1, #D1FAE5)"
       : balance < 0
-      ? "linear-gradient(135deg, #FFECEC, #FECACA)"
-      : "#F3F4F6",
+        ? "linear-gradient(135deg, #FFECEC, #FECACA)"
+        : "#F3F4F6",
   color: balance > 0 ? "#166534" : balance < 0 ? "#991B1B" : "#374151",
   border: "1px solid rgba(0,0,0,0.06)",
   boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
@@ -76,12 +80,26 @@ const TYPE_BG = {
   other: "🧾",
 };
 
+const formatDateTime = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+
+  return d.toLocaleString("es-MX", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
 export default function GroupDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const group = useSelector((state) =>
-    state.groups.list.find((g) => String(g.id) === String(id))
+    state.groups.list.find((g) => String(g.id) === String(id)),
   );
 
   // UI anim
@@ -215,7 +233,7 @@ export default function GroupDetail() {
 
   const members = Array.isArray(group.members) ? group.members : [];
   const expenses = [...(group.expenses ?? [])].sort((a, b) =>
-    String(b?.createdAt || "").localeCompare(String(a?.createdAt || ""))
+    String(b?.createdAt || "").localeCompare(String(a?.createdAt || "")),
   );
 
   // ✅ DEFAULT: cuando eliges quién pagó, se divide en partes iguales entre TODOS
@@ -230,7 +248,10 @@ export default function GroupDetail() {
 
   const isSettled = !!group.isSettled;
 
-  const totalSpent = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  const totalSpent = expenses.reduce(
+    (sum, e) => sum + (Number(e.amount) || 0),
+    0,
+  );
   const totalMembers = members.length;
   const totalExpenses = expenses.length;
 
@@ -273,11 +294,17 @@ export default function GroupDetail() {
   };
 
   const toggleSplit = (m) => {
-    setSplitBetween((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]));
+    setSplitBetween((prev) =>
+      prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m],
+    );
   };
 
   const canAddExpense =
-    desc.trim() && Number(amount) > 0 && paidBy && splitBetween.length > 0 && !isSettled;
+    desc.trim() &&
+    Number(amount) > 0 &&
+    paidBy &&
+    splitBetween.length > 0 &&
+    !isSettled;
 
   const handleAddExpense = async () => {
     try {
@@ -310,7 +337,9 @@ export default function GroupDetail() {
   const handleSettle = async () => {
     if (isSettled) return;
 
-    const ok = confirm("¿Seguro que quieres liquidar este grupo? Ya NO podrás agregar nuevos gastos.");
+    const ok = confirm(
+      "¿Seguro que quieres liquidar este grupo? Ya NO podrás agregar nuevos gastos.",
+    );
     if (!ok) return;
 
     try {
@@ -340,7 +369,9 @@ export default function GroupDetail() {
   };
 
   const handleDeleteGroup = async () => {
-    const ok = confirm(`¿Eliminar el grupo "${group.name}"? Esta acción no se puede deshacer.`);
+    const ok = confirm(
+      `¿Eliminar el grupo "${group.name}"? Esta acción no se puede deshacer.`,
+    );
     if (!ok) return;
 
     try {
@@ -391,7 +422,14 @@ export default function GroupDetail() {
           <div style={{ position: "relative", zIndex: 1 }}>
             <h1 style={{ margin: 0 }}>Group Detail</h1>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                marginTop: 10,
+                flexWrap: "wrap",
+              }}
+            >
               <button
                 style={inviteBtn}
                 onClick={() => {
@@ -433,12 +471,16 @@ export default function GroupDetail() {
               )}
             </div>
 
-            <div style={{ marginTop: 12, fontSize: 22, fontWeight: 900 }}>{group.name}</div>
+            <div style={{ marginTop: 12, fontSize: 22, fontWeight: 900 }}>
+              {group.name}
+            </div>
           </div>
         </div>
 
         {/* STATS */}
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 10 }}>
+        <div
+          style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 10 }}
+        >
           <span
             style={{
               padding: "8px 12px",
@@ -491,7 +533,11 @@ export default function GroupDetail() {
               disabled={isSettled}
             />
 
-            <button onClick={handleAddMember} disabled={isSettled} style={btn("primary", isSettled)}>
+            <button
+              onClick={handleAddMember}
+              disabled={isSettled}
+              style={btn("primary", isSettled)}
+            >
               Agregar miembro
             </button>
           </div>
@@ -509,7 +555,11 @@ export default function GroupDetail() {
               >
                 <span style={{ fontWeight: 700 }}>{m}</span>
 
-                <button onClick={() => handleRemoveMember(m)} disabled={isSettled} style={btn("danger", isSettled)}>
+                <button
+                  onClick={() => handleRemoveMember(m)}
+                  disabled={isSettled}
+                  style={btn("danger", isSettled)}
+                >
                   Eliminar
                 </button>
               </li>
@@ -543,7 +593,14 @@ export default function GroupDetail() {
             <p>Primero agrega miembros para poder registrar gastos.</p>
           ) : (
             <>
-              <div style={{ display: "grid", gap: 8, maxWidth: 520, marginTop: 10 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 8,
+                  maxWidth: 520,
+                  marginTop: 10,
+                }}
+              >
                 <input
                   value={desc}
                   onChange={(e) => setDesc(e.target.value)}
@@ -578,7 +635,14 @@ export default function GroupDetail() {
                   </select>
                 </div>
 
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    flexWrap: "wrap",
+                    marginTop: 6,
+                  }}
+                >
                   <button
                     type="button"
                     disabled={isSettled || members.length === 0}
@@ -588,16 +652,14 @@ export default function GroupDetail() {
                     ⚖️ Dividir en partes iguales
                   </button>
 
+                  
+
                   <button
                     type="button"
-                    disabled={isSettled || !paidBy}
-                    style={btn("ghost", isSettled || !paidBy)}
-                    onClick={() => setSplitBetween([paidBy])}
+                    disabled={isSettled}
+                    style={btn("ghost", isSettled)}
+                    onClick={() => setSplitBetween([])}
                   >
-                    🙋‍♂️ Solo quien pagó
-                  </button>
-
-                  <button type="button" disabled={isSettled} style={btn("ghost", isSettled)} onClick={() => setSplitBetween([])}>
                     🧹 Limpiar
                   </button>
                 </div>
@@ -619,11 +681,17 @@ export default function GroupDetail() {
                   </div>
                 </div>
 
-                <button onClick={handleAddExpense} disabled={!canAddExpense} style={btn("primary", !canAddExpense)}>
+                <button
+                  onClick={handleAddExpense}
+                  disabled={!canAddExpense}
+                  style={btn("primary", !canAddExpense)}
+                >
                   Agregar gasto
                 </button>
 
-                {!canAddExpense && <p style={hint}>Completa todo para agregar un gasto.</p>}
+                {!canAddExpense && (
+                  <p style={hint}>Completa todo para agregar un gasto.</p>
+                )}
               </div>
 
               <div style={{ marginTop: 14 }} />
@@ -634,21 +702,66 @@ export default function GroupDetail() {
                 <div style={{ display: "grid", gap: 10, marginTop: 8 }}>
                   {expenses.map((e) => (
                     <div key={e.id} style={expenseCard}>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 12,
+                        }}
+                      >
                         <div>
                           <div style={{ fontWeight: 900 }}>{e.description}</div>
-                          <div style={{ fontSize: 12, color: "rgba(229,231,235,0.70)", marginTop: 2 }}>
-                            Pagó: <strong>{e.paidBy}</strong> · Split: {(e.splitBetween ?? []).join(", ")}
+                          <div
+                            style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}
+                          >
+                            🗓️ {formatDateTime(e.createdAt)}
+                          </div>
+                          Pagó: <strong>{e.paidBy}</strong> · Split:{" "}
+                          <strong>
+                            {(e.splitBetween ?? []).join(", ") || "—"}
+                          </strong>
+                          <div style={{ marginTop: 6, fontWeight: 800 }}>
+                            {(() => {
+                              const split = Array.isArray(e.splitBetween)
+                                ? e.splitBetween
+                                : [];
+                              const totalMembers = members.length;
+
+                              // ⚖️ partes iguales entre todos
+                              if (
+                                split.length === totalMembers &&
+                                totalMembers > 0
+                              ) {
+                                return "⚖️ Se dividió en partes iguales entre todos.";
+                              }
+
+                              // 💸 alguien le debe TODO al que pagó
+                              if (split.length === 1 && split[0] !== e.paidBy) {
+                                return `💸 ${split[0]} le debe TODO a ${e.paidBy}.`;
+                              }
+
+                              // 📌 split personalizado
+                              if (split.length > 0) {
+                                return `📌 Se dividió entre: ${split.join(", ")}.`;
+                              }
+
+                              return "⚠️ No hay split seleccionado.";
+                            })()}
                           </div>
                         </div>
 
                         <div style={{ textAlign: "right" }}>
-                          <div style={{ fontWeight: 900, color: "#E5E7EB" }}>{formatMoney(e.amount)}</div>
+                          <div style={{ fontWeight: 900, color: "#E5E7EB" }}>
+                            {formatMoney(e.amount)}
+                          </div>
 
                           <button
                             onClick={() => handleDeleteExpense(e.id)}
                             disabled={isSettled}
-                            style={{ ...btn("danger", isSettled), marginTop: 6 }}
+                            style={{
+                              ...btn("danger", isSettled),
+                              marginTop: 6,
+                            }}
                           >
                             Eliminar
                           </button>
@@ -673,7 +786,11 @@ export default function GroupDetail() {
               <li key={name} style={{ marginBottom: 8 }}>
                 <strong>{name}</strong>
                 <span style={badgeStyle(balance)}>
-                  {balance === 0 ? "Está en paz" : balance > 0 ? `Recibe ${formatMoney(balance)}` : `Debe ${formatMoney(Math.abs(balance))}`}
+                  {balance === 0
+                    ? "Está en paz"
+                    : balance > 0
+                      ? `Recibe ${formatMoney(balance)}`
+                      : `Debe ${formatMoney(Math.abs(balance))}`}
                 </span>
               </li>
             ))}
@@ -681,8 +798,20 @@ export default function GroupDetail() {
         </div>
 
         {/* BUTTONS */}
-        <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
-          <button onClick={handleSettle} disabled={isSettled} style={btn("warning", isSettled)}>
+        <div
+          style={{
+            marginTop: 24,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+            alignItems: "flex-start",
+          }}
+        >
+          <button
+            onClick={handleSettle}
+            disabled={isSettled}
+            style={btn("warning", isSettled)}
+          >
             {isSettled ? "Grupo liquidado ✅" : "✅ Liquidar grupo"}
           </button>
 
@@ -706,14 +835,18 @@ export default function GroupDetail() {
             <ul>
               {settlements.map((p, idx) => (
                 <li key={idx}>
-                  <strong>{p.from}</strong> paga <strong>{formatMoney(p.amount)}</strong> a <strong>{p.to}</strong>
+                  <strong>{p.from}</strong> paga{" "}
+                  <strong>{formatMoney(p.amount)}</strong> a{" "}
+                  <strong>{p.to}</strong>
                 </li>
               ))}
             </ul>
           )}
         </div>
 
-        <div style={{ marginTop: 24, display: "flex", justifyContent: "center" }}>
+        <div
+          style={{ marginTop: 24, display: "flex", justifyContent: "center" }}
+        >
           <button onClick={() => navigate("/")} style={btn("ghost", false)}>
             ← Volver a Home
           </button>
