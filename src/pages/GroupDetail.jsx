@@ -1,9 +1,5 @@
 // src/pages/GroupDetail.jsx
-import {
-  calculateBalances,
-  settleBalances,
-  formatMoney,
-} from "../utils/balances";
+import { calculateBalances, settleBalances, formatMoney } from "../utils/balances";
 import { useParams, useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { useState, useEffect } from "react";
@@ -88,6 +84,13 @@ export default function GroupDetail() {
     state.groups.list.find((g) => String(g.id) === String(id))
   );
 
+  // UI anim
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), 250);
+    return () => clearTimeout(t);
+  }, []);
+
   // Members
   const [memberName, setMemberName] = useState("");
 
@@ -97,24 +100,7 @@ export default function GroupDetail() {
   const [paidBy, setPaidBy] = useState("");
   const [splitBetween, setSplitBetween] = useState([]);
 
-  // UI anim
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setMounted(true), 250);
-    return () => clearTimeout(t);
-  }, []);
-
-  // ✅ Cuando eliges "Pagó", por default se divide entre todos (partes iguales)
-  useEffect(() => {
-    if (!paidBy) return;
-
-    const currentMembers = Array.isArray(group?.members) ? group.members : [];
-    if (currentMembers.length === 0) return;
-
-    setSplitBetween(currentMembers);
-  }, [paidBy, group]);
-
-  // Helpers UI
+  // ===== Helpers UI =====
   const btn = (variant = "primary", disabled = false) => {
     const variants = {
       primary: {
@@ -227,10 +213,17 @@ export default function GroupDetail() {
   const typeMeta = TYPE_META?.[group?.type] ?? TYPE_META.other;
   const bgIcon = TYPE_BG?.[group?.type] ?? TYPE_BG.other;
 
-  const members = group.members ?? [];
+  const members = Array.isArray(group.members) ? group.members : [];
   const expenses = [...(group.expenses ?? [])].sort((a, b) =>
     String(b?.createdAt || "").localeCompare(String(a?.createdAt || ""))
   );
+
+  // ✅ DEFAULT: cuando eliges quién pagó, se divide en partes iguales entre TODOS
+  useEffect(() => {
+    if (!paidBy) return;
+    if (members.length === 0) return;
+    setSplitBetween(members);
+  }, [paidBy, members]);
 
   const balances = calculateBalances(group);
   const settlements = settleBalances(balances);
@@ -255,7 +248,6 @@ export default function GroupDetail() {
   });
 
   // ===== Firestore Actions =====
-
   const handleAddMember = async () => {
     const name = (memberName || "").trim();
     if (!name) return;
@@ -281,23 +273,17 @@ export default function GroupDetail() {
   };
 
   const toggleSplit = (m) => {
-    setSplitBetween((prev) =>
-      prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]
-    );
+    setSplitBetween((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]));
   };
 
   const canAddExpense =
-    desc.trim() &&
-    Number(amount) > 0 &&
-    paidBy &&
-    splitBetween.length > 0 &&
-    !isSettled;
+    desc.trim() && Number(amount) > 0 && paidBy && splitBetween.length > 0 && !isSettled;
 
   const handleAddExpense = async () => {
     try {
       await addExpense(id, {
         description: desc,
-        amount: Number(amount), // ✅ importante
+        amount,
         paidBy,
         splitBetween,
       });
@@ -324,9 +310,7 @@ export default function GroupDetail() {
   const handleSettle = async () => {
     if (isSettled) return;
 
-    const ok = confirm(
-      "¿Seguro que quieres liquidar este grupo? Ya NO podrás agregar nuevos gastos."
-    );
+    const ok = confirm("¿Seguro que quieres liquidar este grupo? Ya NO podrás agregar nuevos gastos.");
     if (!ok) return;
 
     try {
@@ -356,9 +340,7 @@ export default function GroupDetail() {
   };
 
   const handleDeleteGroup = async () => {
-    const ok = confirm(
-      `¿Eliminar el grupo "${group.name}"? Esta acción no se puede deshacer.`
-    );
+    const ok = confirm(`¿Eliminar el grupo "${group.name}"? Esta acción no se puede deshacer.`);
     if (!ok) return;
 
     try {
@@ -451,9 +433,7 @@ export default function GroupDetail() {
               )}
             </div>
 
-            <div style={{ marginTop: 12, fontSize: 22, fontWeight: 900 }}>
-              {group.name}
-            </div>
+            <div style={{ marginTop: 12, fontSize: 22, fontWeight: 900 }}>{group.name}</div>
           </div>
         </div>
 
@@ -511,11 +491,7 @@ export default function GroupDetail() {
               disabled={isSettled}
             />
 
-            <button
-              onClick={handleAddMember}
-              disabled={isSettled}
-              style={btn("primary", isSettled)}
-            >
+            <button onClick={handleAddMember} disabled={isSettled} style={btn("primary", isSettled)}>
               Agregar miembro
             </button>
           </div>
@@ -533,11 +509,7 @@ export default function GroupDetail() {
               >
                 <span style={{ fontWeight: 700 }}>{m}</span>
 
-                <button
-                  onClick={() => handleRemoveMember(m)}
-                  disabled={isSettled}
-                  style={btn("danger", isSettled)}
-                >
+                <button onClick={() => handleRemoveMember(m)} disabled={isSettled} style={btn("danger", isSettled)}>
                   Eliminar
                 </button>
               </li>
@@ -625,12 +597,7 @@ export default function GroupDetail() {
                     🙋‍♂️ Solo quien pagó
                   </button>
 
-                  <button
-                    type="button"
-                    disabled={isSettled}
-                    style={btn("ghost", isSettled)}
-                    onClick={() => setSplitBetween([])}
-                  >
+                  <button type="button" disabled={isSettled} style={btn("ghost", isSettled)} onClick={() => setSplitBetween([])}>
                     🧹 Limpiar
                   </button>
                 </div>
@@ -652,11 +619,7 @@ export default function GroupDetail() {
                   </div>
                 </div>
 
-                <button
-                  onClick={handleAddExpense}
-                  disabled={!canAddExpense}
-                  style={btn("primary", !canAddExpense)}
-                >
+                <button onClick={handleAddExpense} disabled={!canAddExpense} style={btn("primary", !canAddExpense)}>
                   Agregar gasto
                 </button>
 
@@ -674,22 +637,13 @@ export default function GroupDetail() {
                       <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                         <div>
                           <div style={{ fontWeight: 900 }}>{e.description}</div>
-                          <div
-                            style={{
-                              fontSize: 12,
-                              color: "rgba(229,231,235,0.70)",
-                              marginTop: 2,
-                            }}
-                          >
-                            Pagó: <strong>{e.paidBy}</strong> · Split:{" "}
-                            {(e.splitBetween ?? []).join(", ")}
+                          <div style={{ fontSize: 12, color: "rgba(229,231,235,0.70)", marginTop: 2 }}>
+                            Pagó: <strong>{e.paidBy}</strong> · Split: {(e.splitBetween ?? []).join(", ")}
                           </div>
                         </div>
 
                         <div style={{ textAlign: "right" }}>
-                          <div style={{ fontWeight: 900, color: "#E5E7EB" }}>
-                            {formatMoney(e.amount)}
-                          </div>
+                          <div style={{ fontWeight: 900, color: "#E5E7EB" }}>{formatMoney(e.amount)}</div>
 
                           <button
                             onClick={() => handleDeleteExpense(e.id)}
@@ -719,11 +673,7 @@ export default function GroupDetail() {
               <li key={name} style={{ marginBottom: 8 }}>
                 <strong>{name}</strong>
                 <span style={badgeStyle(balance)}>
-                  {balance === 0
-                    ? "Está en paz"
-                    : balance > 0
-                    ? `Recibe ${formatMoney(balance)}`
-                    : `Debe ${formatMoney(Math.abs(balance))}`}
+                  {balance === 0 ? "Está en paz" : balance > 0 ? `Recibe ${formatMoney(balance)}` : `Debe ${formatMoney(Math.abs(balance))}`}
                 </span>
               </li>
             ))}
@@ -731,15 +681,7 @@ export default function GroupDetail() {
         </div>
 
         {/* BUTTONS */}
-        <div
-          style={{
-            marginTop: 24,
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            alignItems: "flex-start",
-          }}
-        >
+        <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
           <button onClick={handleSettle} disabled={isSettled} style={btn("warning", isSettled)}>
             {isSettled ? "Grupo liquidado ✅" : "✅ Liquidar grupo"}
           </button>
@@ -764,8 +706,7 @@ export default function GroupDetail() {
             <ul>
               {settlements.map((p, idx) => (
                 <li key={idx}>
-                  <strong>{p.from}</strong> paga <strong>{formatMoney(p.amount)}</strong> a{" "}
-                  <strong>{p.to}</strong>
+                  <strong>{p.from}</strong> paga <strong>{formatMoney(p.amount)}</strong> a <strong>{p.to}</strong>
                 </li>
               ))}
             </ul>
