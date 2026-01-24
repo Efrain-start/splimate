@@ -1,5 +1,6 @@
 // src/app/groupsApi.js
 import { db } from "../firebase";
+import { runTransaction } from "firebase/firestore";
 import {
   collection,
   addDoc,
@@ -91,35 +92,50 @@ export async function removeMember(groupId, memberName) {
 export async function addExpense(groupId, expense) {
   const description = (expense?.description || "").trim();
   const paidBy = (expense?.paidBy || "").trim();
+
   const splitBetween = Array.isArray(expense?.splitBetween)
-    ? expense.splitBetween
+    ? expense.splitBetween.map((x) => String(x).trim()).filter(Boolean)
     : [];
 
   const amountNum = Number(expense?.amount);
 
   if (!description) throw new Error("Descripción vacía");
   if (!paidBy) throw new Error("Falta quién pagó");
-  if (!Number.isFinite(amountNum) || amountNum <= 0)
-    throw new Error("Monto inválido");
+  if (!Number.isFinite(amountNum) || amountNum <= 0) throw new Error("Monto inválido");
   if (splitBetween.length === 0) throw new Error("Split vacío");
 
   const ref = doc(db, "groups", groupId);
 
   const payload = {
-    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    id:
+      globalThis.crypto?.randomUUID?.() ??
+      `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     description,
     amount: amountNum,
     paidBy,
     splitBetween,
-    createdAt: new Date().toISOString(), // ✅ para que sea consistente
+    createdAt: new Date().toISOString(),
   };
 
-  await updateDoc(ref, {
-    expenses: arrayUnion(payload),
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error("Grupo no existe");
+
+    const data = snap.data();
+    if (data?.isSettled) throw new Error("Grupo liquidado");
+
+    const prev = Array.isArray(data?.expenses) ? data.expenses : [];
+
+    // (Opcional) evita duplicado por id (por si se reintenta)
+    const already = prev.some((e) => String(e?.id) === String(payload.id));
+    const next = already ? prev : [...prev, payload];
+
+    tx.update(ref, { expenses: next });
   });
 
   return payload.id;
 }
+
 
 /**
  * ✅ Importante:
@@ -134,16 +150,19 @@ export async function removeExpense(groupId, expenseOrId) {
   if (!expenseId) throw new Error("Falta expenseId");
 
   const ref = doc(db, "groups", groupId);
-  const snap = await getDoc(ref);
 
-  if (!snap.exists()) throw new Error("Grupo no existe");
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error("Grupo no existe");
 
-  const data = snap.data();
-  const prev = Array.isArray(data.expenses) ? data.expenses : [];
-  const next = prev.filter((e) => String(e?.id) !== String(expenseId));
+    const data = snap.data();
+    const prev = Array.isArray(data?.expenses) ? data.expenses : [];
+    const next = prev.filter((e) => String(e?.id) !== String(expenseId));
 
-  await updateDoc(ref, { expenses: next });
+    tx.update(ref, { expenses: next });
+  });
 }
+
 
 // =========================
 // SETTLE / REOPEN
