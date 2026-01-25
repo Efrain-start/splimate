@@ -651,17 +651,8 @@ export default function GroupDetail() {
                   >
                     ⚖️ Dividir en partes iguales
                   </button>
-
-                  
-
-                  <button
-                    type="button"
-                    disabled={isSettled}
-                    style={btn("ghost", isSettled)}
-                    onClick={() => setSplitBetween([])}
-                  >
-                    🧹 Limpiar
-                  </button>
+                 
+    
                 </div>
 
                 <div>
@@ -787,7 +778,7 @@ export default function GroupDetail() {
                 <strong>{name}</strong>
                 <span style={badgeStyle(balance)}>
                   {balance === 0
-                    ? "Está en paz"
+                    ? "Sin deuda"
                     : balance > 0
                       ? `Recibe ${formatMoney(balance)}`
                       : `Debe ${formatMoney(Math.abs(balance))}`}

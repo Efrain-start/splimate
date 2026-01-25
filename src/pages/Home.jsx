@@ -305,9 +305,7 @@ export default function Home() {
 
             <div style={modalBody}>
               <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                <button style={iconBtn} title="(Opcional) foto">
-                  📷
-                </button>
+                
 
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 12, opacity: 0.75 }}>
@@ -316,7 +314,7 @@ export default function Home() {
                   <input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Ej. Viaje a Gto"
+                    placeholder="Ej. Vacaciones, Casa, Roomies..."
                     style={input}
                     autoFocus
                   />
