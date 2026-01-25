@@ -1,5 +1,9 @@
 // src/pages/GroupDetail.jsx
 import {
+  ensureNotificationPermission,
+  showNotification,
+} from "../utils/notify";
+import {
   calculateBalances,
   settleBalances,
   formatMoney,
@@ -236,6 +240,37 @@ export default function GroupDetail() {
     String(b?.createdAt || "").localeCompare(String(a?.createdAt || "")),
   );
 
+  // 🔔 Notificaciones: detectar gasto nuevo
+  useEffect(() => {
+    if (!expenses || expenses.length === 0) return;
+
+    const key = `sm:lastExpenseSeen:${id}`;
+    const latest = expenses[0]; // ya vienen ordenados desc
+    const lastSeen = localStorage.getItem(key);
+
+    // primera vez: solo marca, no notifica
+    if (!lastSeen) {
+      localStorage.setItem(key, latest?.id || latest?.createdAt || "init");
+      return;
+    }
+
+    const latestMarker = latest?.id || latest?.createdAt || "";
+    if (!latestMarker) return;
+
+    if (latestMarker === lastSeen) return;
+
+    localStorage.setItem(key, latestMarker);
+
+    ensureNotificationPermission().then((res) => {
+      if (!res.ok) return;
+
+      const title = "SplitMate 💸 Nuevo gasto";
+      const body = `${latest.description || "Gasto"} · ${formatMoney(latest.amount)} · pagó ${latest.paidBy || "alguien"}`;
+
+      showNotification(title, { body });
+    });
+  }, [expenses, id]);
+
   // ✅ DEFAULT: cuando eliges quién pagó, se divide en partes iguales entre TODOS
   useEffect(() => {
     if (!paidBy) return;
@@ -439,6 +474,27 @@ export default function GroupDetail() {
                 }}
               >
                 🔗 Invitar
+              </button>
+
+              <button
+                style={inviteBtn}
+                onClick={async () => {
+                  const r = await ensureNotificationPermission();
+
+                  if (!r.ok) {
+                    alert(`⚠️ ${r.reason}`);
+                    return;
+                  }
+
+                  // ✅ Notificación de prueba
+                  showNotification("SplitMate 🔔", {
+                    body: "Notificación activada correctamente ✅",
+                  });
+
+                  alert("✅ Notificaciones activadas");
+                }}
+              >
+                🔔 Activar notificaciones
               </button>
 
               <div
@@ -651,8 +707,6 @@ export default function GroupDetail() {
                   >
                     ⚖️ Dividir en partes iguales
                   </button>
-                 
-    
                 </div>
 
                 <div>
