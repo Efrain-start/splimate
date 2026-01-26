@@ -1,16 +1,11 @@
 // src/pages/GroupDetail.jsx
-import {
-  ensureNotificationPermission,
-  showNotification,
-} from "../utils/notify";
-import {
-  calculateBalances,
-  settleBalances,
-  formatMoney,
-} from "../utils/balances";
+import ExpenseSplitInfoModal from "../components/ExpenseSplitInfoModal";
+import { ensureNotificationPermission, showNotification } from "../utils/notify";
+import { calculateBalances, settleBalances, formatMoney } from "../utils/balances";
+
 import { useParams, useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   addMember,
@@ -22,6 +17,7 @@ import {
   reopenGroupFS,
 } from "../app/groupsApi";
 
+// ====== Styles / UI ======
 const badgeStyle = (balance) => ({
   display: "inline-flex",
   alignItems: "center",
@@ -34,8 +30,8 @@ const badgeStyle = (balance) => ({
     balance > 0
       ? "linear-gradient(135deg, #E8FFF1, #D1FAE5)"
       : balance < 0
-        ? "linear-gradient(135deg, #FFECEC, #FECACA)"
-        : "#F3F4F6",
+      ? "linear-gradient(135deg, #FFECEC, #FECACA)"
+      : "#F3F4F6",
   color: balance > 0 ? "#166534" : balance < 0 ? "#991B1B" : "#374151",
   border: "1px solid rgba(0,0,0,0.06)",
   boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
@@ -53,19 +49,19 @@ const inviteBtn = {
 
 const TYPE_THEME = {
   trip: {
-    gradient: "linear-gradient(135deg, #BAE6FD, #E0F2FE)",
+    gradient: "linear-gradient(135deg, rgba(186,230,253,0.18), rgba(224,242,254,0.05))",
     soft: "rgba(186,230,253,0.08)",
   },
   home: {
-    gradient: "linear-gradient(135deg, #BBF7D0, #DCFCE7)",
+    gradient: "linear-gradient(135deg, rgba(187,247,208,0.18), rgba(220,252,231,0.05))",
     soft: "rgba(187,247,208,0.08)",
   },
   couple: {
-    gradient: "linear-gradient(135deg, #FBCFE8, #FCE7F3)",
+    gradient: "linear-gradient(135deg, rgba(251,207,232,0.18), rgba(252,231,243,0.05))",
     soft: "rgba(251,207,232,0.08)",
   },
   other: {
-    gradient: "linear-gradient(135deg, #E2E8F0, #F1F5F9)",
+    gradient: "linear-gradient(135deg, rgba(226,232,240,0.18), rgba(241,245,249,0.05))",
     soft: "rgba(226,232,240,0.08)",
   },
 };
@@ -88,7 +84,6 @@ const formatDateTime = (iso) => {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-
   return d.toLocaleString("es-MX", {
     day: "2-digit",
     month: "short",
@@ -103,7 +98,7 @@ export default function GroupDetail() {
   const navigate = useNavigate();
 
   const group = useSelector((state) =>
-    state.groups.list.find((g) => String(g.id) === String(id)),
+    (state.groups?.list ?? []).find((g) => String(g.id) === String(id))
   );
 
   // UI anim
@@ -116,11 +111,21 @@ export default function GroupDetail() {
   // Members
   const [memberName, setMemberName] = useState("");
 
-  // Expenses
+  // Expenses form
   const [desc, setDesc] = useState("");
   const [amount, setAmount] = useState("");
   const [paidBy, setPaidBy] = useState("");
   const [splitBetween, setSplitBetween] = useState([]);
+
+  // Advanced split UI
+  const [advancedSplitOpen, setAdvancedSplitOpen] = useState(false);
+
+  // Modal Split Info
+  const [splitInfoOpen, setSplitInfoOpen] = useState(false);
+  const [splitExpense, setSplitExpense] = useState(null);
+
+  // "Quién soy yo" (por ahora fijo)
+  const currentUser = "Efra";
 
   // ===== Helpers UI =====
   const btn = (variant = "primary", disabled = false) => {
@@ -206,6 +211,107 @@ export default function GroupDetail() {
     boxShadow: "0 12px 30px rgba(0,0,0,0.30)",
   };
 
+  // ✅ derived data (safe even if group is undefined)
+  const members = useMemo(
+    () => (Array.isArray(group?.members) ? group.members : []),
+    [group]
+  );
+
+  const expenses = useMemo(() => {
+    const list = [...(group?.expenses ?? [])];
+    list.sort((a, b) =>
+      String(b?.createdAt || "").localeCompare(String(a?.createdAt || ""))
+    );
+    return list;
+  }, [group]);
+
+  // ===== Splitwise presets =====
+  const iAmInGroup = useMemo(() => members.includes(currentUser), [members]);
+  const canUseOtherPresets = iAmInGroup && members.length === 2;
+
+  const other = useMemo(() => {
+    if (!canUseOtherPresets) return "";
+    return members.find((m) => m !== currentUser) || "";
+  }, [canUseOtherPresets, members]);
+
+  const applyPreset = (preset) => {
+    if (members.length === 0) return;
+
+    switch (preset) {
+      case "YOU_EQUAL": {
+        setPaidBy(currentUser);
+        setSplitBetween(members);
+        setAdvancedSplitOpen(false);
+        break;
+      }
+      case "YOU_TOTAL": {
+        setPaidBy(currentUser);
+        const others = members.filter((m) => m !== currentUser);
+        setSplitBetween(others.length ? others : members);
+        setAdvancedSplitOpen(false);
+        break;
+      }
+      case "OTHER_EQUAL": {
+        if (!canUseOtherPresets || !other) return;
+        setPaidBy(other);
+        setSplitBetween(members);
+        setAdvancedSplitOpen(false);
+        break;
+      }
+      case "OTHER_TOTAL": {
+        if (!canUseOtherPresets || !other) return;
+        setPaidBy(other);
+        setSplitBetween([currentUser]);
+        setAdvancedSplitOpen(false);
+        break;
+      }
+      default:
+        break;
+    }
+  };
+
+  // 🔔 Notificaciones: detectar gasto nuevo
+  useEffect(() => {
+    if (!group) return;
+    if (expenses.length === 0) return;
+
+    const key = `sm:lastExpenseSeen:${id}`;
+    const latest = expenses[0];
+    const lastSeen = localStorage.getItem(key);
+
+    // primera vez: solo marca, no notifica
+    if (!lastSeen) {
+      localStorage.setItem(key, latest?.id || latest?.createdAt || "init");
+      return;
+    }
+
+    const latestMarker = latest?.id || latest?.createdAt || "";
+    if (!latestMarker) return;
+    if (latestMarker === lastSeen) return;
+
+    localStorage.setItem(key, latestMarker);
+
+    ensureNotificationPermission().then((res) => {
+      if (!res.ok) return;
+
+      showNotification("SplitMate 💸 Nuevo gasto", {
+        body: `${latest.description || "Gasto"} · ${formatMoney(latest.amount)} · pagó ${
+          latest.paidBy || "alguien"
+        }`,
+      });
+    });
+  }, [group, id, expenses]);
+
+  // ✅ DEFAULT split: cuando eliges quién pagó, se divide entre TODOS
+  useEffect(() => {
+    if (!group) return;
+    if (!paidBy) return;
+    if (members.length === 0) return;
+
+    setSplitBetween((prev) => (prev.length ? prev : members));
+  }, [group, paidBy, members]);
+
+  // ===== early return (after hooks) =====
   if (!group) {
     return (
       <div
@@ -235,70 +341,21 @@ export default function GroupDetail() {
   const typeMeta = TYPE_META?.[group?.type] ?? TYPE_META.other;
   const bgIcon = TYPE_BG?.[group?.type] ?? TYPE_BG.other;
 
-  const members = Array.isArray(group.members) ? group.members : [];
-  const expenses = [...(group.expenses ?? [])].sort((a, b) =>
-    String(b?.createdAt || "").localeCompare(String(a?.createdAt || "")),
-  );
-
-  // 🔔 Notificaciones: detectar gasto nuevo
-  useEffect(() => {
-    if (!expenses || expenses.length === 0) return;
-
-    const key = `sm:lastExpenseSeen:${id}`;
-    const latest = expenses[0]; // ya vienen ordenados desc
-    const lastSeen = localStorage.getItem(key);
-
-    // primera vez: solo marca, no notifica
-    if (!lastSeen) {
-      localStorage.setItem(key, latest?.id || latest?.createdAt || "init");
-      return;
-    }
-
-    const latestMarker = latest?.id || latest?.createdAt || "";
-    if (!latestMarker) return;
-
-    if (latestMarker === lastSeen) return;
-
-    localStorage.setItem(key, latestMarker);
-
-    ensureNotificationPermission().then((res) => {
-      if (!res.ok) return;
-
-      const title = "SplitMate 💸 Nuevo gasto";
-      const body = `${latest.description || "Gasto"} · ${formatMoney(latest.amount)} · pagó ${latest.paidBy || "alguien"}`;
-
-      showNotification(title, { body });
-    });
-  }, [expenses, id]);
-
-  // ✅ DEFAULT: cuando eliges quién pagó, se divide en partes iguales entre TODOS
-  useEffect(() => {
-    if (!paidBy) return;
-    if (members.length === 0) return;
-    setSplitBetween(members);
-  }, [paidBy, members]);
-
   const balances = calculateBalances(group);
   const settlements = settleBalances(balances);
 
   const isSettled = !!group.isSettled;
 
-  const totalSpent = expenses.reduce(
-    (sum, e) => sum + (Number(e.amount) || 0),
-    0,
-  );
+  const totalSpent = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
   const totalMembers = members.length;
   const totalExpenses = expenses.length;
 
   const balancesSorted = Object.entries(balances).sort((a, b) => {
     const va = Number(a[1]) || 0;
     const vb = Number(b[1]) || 0;
-
     const rank = (v) => (v < 0 ? 0 : v > 0 ? 1 : 2);
-
     const ra = rank(va);
     const rb = rank(vb);
-
     if (ra !== rb) return ra - rb;
     return Math.abs(vb) - Math.abs(va);
   });
@@ -329,17 +386,11 @@ export default function GroupDetail() {
   };
 
   const toggleSplit = (m) => {
-    setSplitBetween((prev) =>
-      prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m],
-    );
+    setSplitBetween((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]));
   };
 
   const canAddExpense =
-    desc.trim() &&
-    Number(amount) > 0 &&
-    paidBy &&
-    splitBetween.length > 0 &&
-    !isSettled;
+    desc.trim() && Number(amount) > 0 && paidBy && splitBetween.length > 0 && !isSettled;
 
   const handleAddExpense = async () => {
     try {
@@ -354,6 +405,7 @@ export default function GroupDetail() {
       setAmount("");
       setPaidBy("");
       setSplitBetween([]);
+      setAdvancedSplitOpen(false);
     } catch (e) {
       console.error(e);
       alert("No se pudo agregar el gasto. Revisa consola.");
@@ -372,9 +424,7 @@ export default function GroupDetail() {
   const handleSettle = async () => {
     if (isSettled) return;
 
-    const ok = confirm(
-      "¿Seguro que quieres liquidar este grupo? Ya NO podrás agregar nuevos gastos.",
-    );
+    const ok = confirm("¿Seguro que quieres liquidar este grupo? Ya NO podrás agregar nuevos gastos.");
     if (!ok) return;
 
     try {
@@ -397,6 +447,7 @@ export default function GroupDetail() {
       setAmount("");
       setPaidBy("");
       setSplitBetween([]);
+      setAdvancedSplitOpen(false);
     } catch (e) {
       console.error(e);
       alert("No se pudo reabrir. Revisa consola.");
@@ -404,9 +455,7 @@ export default function GroupDetail() {
   };
 
   const handleDeleteGroup = async () => {
-    const ok = confirm(
-      `¿Eliminar el grupo "${group.name}"? Esta acción no se puede deshacer.`,
-    );
+    const ok = confirm(`¿Eliminar el grupo "${group.name}"? Esta acción no se puede deshacer.`);
     if (!ok) return;
 
     try {
@@ -419,7 +468,19 @@ export default function GroupDetail() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", padding: 20, color: "#E5E7EB" }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        padding: 20,
+        color: "#E5E7EB",
+        background: `
+          radial-gradient(900px 500px at 10% 0%, rgba(99,102,241,0.20), transparent),
+          radial-gradient(700px 400px at 90% 20%, rgba(34,197,94,0.18), transparent),
+          ${theme.gradient},
+          #0F172A
+        `,
+      }}
+    >
       <div
         style={{
           opacity: mounted ? 1 : 0,
@@ -428,7 +489,7 @@ export default function GroupDetail() {
           willChange: "opacity, transform",
         }}
       >
-        {/* HEADER CARD */}
+        {/* HEADER */}
         <div
           style={{
             ...card,
@@ -457,14 +518,7 @@ export default function GroupDetail() {
           <div style={{ position: "relative", zIndex: 1 }}>
             <h1 style={{ margin: 0 }}>Group Detail</h1>
 
-            <div
-              style={{
-                display: "flex",
-                gap: 10,
-                marginTop: 10,
-                flexWrap: "wrap",
-              }}
-            >
+            <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
               <button
                 style={inviteBtn}
                 onClick={() => {
@@ -480,17 +534,11 @@ export default function GroupDetail() {
                 style={inviteBtn}
                 onClick={async () => {
                   const r = await ensureNotificationPermission();
-
                   if (!r.ok) {
                     alert(`⚠️ ${r.reason}`);
                     return;
                   }
-
-                  // ✅ Notificación de prueba
-                  showNotification("SplitMate 🔔", {
-                    body: "Notificación activada correctamente ✅",
-                  });
-
+                  showNotification("SplitMate 🔔", { body: "Notificación activada correctamente ✅" });
                   alert("✅ Notificaciones activadas");
                 }}
               >
@@ -527,16 +575,12 @@ export default function GroupDetail() {
               )}
             </div>
 
-            <div style={{ marginTop: 12, fontSize: 22, fontWeight: 900 }}>
-              {group.name}
-            </div>
+            <div style={{ marginTop: 12, fontSize: 22, fontWeight: 900 }}>{group.name}</div>
           </div>
         </div>
 
         {/* STATS */}
-        <div
-          style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 10 }}
-        >
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 10 }}>
           <span
             style={{
               padding: "8px 12px",
@@ -589,11 +633,7 @@ export default function GroupDetail() {
               disabled={isSettled}
             />
 
-            <button
-              onClick={handleAddMember}
-              disabled={isSettled}
-              style={btn("primary", isSettled)}
-            >
+            <button onClick={handleAddMember} disabled={isSettled} style={btn("primary", isSettled)}>
               Agregar miembro
             </button>
           </div>
@@ -609,13 +649,12 @@ export default function GroupDetail() {
                   padding: "6px 0",
                 }}
               >
-                <span style={{ fontWeight: 700 }}>{m}</span>
+                <span style={{ fontWeight: 700 }}>
+                  {m}
+                  <span style={badgeStyle(balances[m] ?? 0)}>{formatMoney(balances[m] ?? 0)}</span>
+                </span>
 
-                <button
-                  onClick={() => handleRemoveMember(m)}
-                  disabled={isSettled}
-                  style={btn("danger", isSettled)}
-                >
+                <button onClick={() => handleRemoveMember(m)} disabled={isSettled} style={btn("danger", isSettled)}>
                   Eliminar
                 </button>
               </li>
@@ -649,14 +688,8 @@ export default function GroupDetail() {
             <p>Primero agrega miembros para poder registrar gastos.</p>
           ) : (
             <>
-              <div
-                style={{
-                  display: "grid",
-                  gap: 8,
-                  maxWidth: 520,
-                  marginTop: 10,
-                }}
-              >
+              {/* FORM */}
+              <div style={{ display: "grid", gap: 8, maxWidth: 520, marginTop: 10 }}>
                 <input
                   value={desc}
                   onChange={(e) => setDesc(e.target.value)}
@@ -691,54 +724,99 @@ export default function GroupDetail() {
                   </select>
                 </div>
 
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 8,
-                    flexWrap: "wrap",
-                    marginTop: 6,
-                  }}
-                >
+                {/* Presets */}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
                   <button
                     type="button"
-                    disabled={isSettled || members.length === 0}
-                    style={btn("ghost", isSettled || members.length === 0)}
-                    onClick={() => setSplitBetween(members)}
+                    disabled={isSettled || members.length < 2}
+                    style={btn("ghost", isSettled || members.length < 2)}
+                    onClick={() => applyPreset("YOU_EQUAL")}
                   >
-                    ⚖️ Dividir en partes iguales
+                    👤 Tú pagaste · partes iguales
                   </button>
+
+                  <button
+                    type="button"
+                    disabled={isSettled || members.length < 2}
+                    style={btn("ghost", isSettled || members.length < 2)}
+                    onClick={() => applyPreset("YOU_TOTAL")}
+                  >
+                    💰 Se te debe la cantidad total
+                  </button>
+
+                  {canUseOtherPresets && other && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={isSettled}
+                        style={btn("ghost", isSettled)}
+                        onClick={() => applyPreset("OTHER_EQUAL")}
+                      >
+                        🙋 {other} pagó · partes iguales
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isSettled}
+                        style={btn("ghost", isSettled)}
+                        onClick={() => applyPreset("OTHER_TOTAL")}
+                      >
+                        🧾 A {other} se le debe la cantidad total
+                      </button>
+                    </>
+                  )}
                 </div>
 
-                <div>
-                  <div style={{ marginBottom: 6 }}>Se divide entre:</div>
-                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                    {members.map((m) => (
-                      <label key={m} style={{ display: "flex", gap: 6 }}>
-                        <input
-                          type="checkbox"
-                          checked={splitBetween.includes(m)}
-                          onChange={() => toggleSplit(m)}
-                          disabled={isSettled}
-                        />
-                        {m}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
+                {/* Toggle advanced */}
                 <button
-                  onClick={handleAddExpense}
-                  disabled={!canAddExpense}
-                  style={btn("primary", !canAddExpense)}
+                  type="button"
+                  disabled={isSettled || members.length < 2}
+                  style={btn("ghost", isSettled || members.length < 2)}
+                  onClick={() => setAdvancedSplitOpen((v) => !v)}
                 >
+                  ⚙️ Más opciones {advancedSplitOpen ? "▲" : "▼"}
+                </button>
+
+                {/* Advanced split */}
+                {advancedSplitOpen && (
+                  <div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                      <button type="button" disabled={isSettled} style={btn("ghost", isSettled)} onClick={() => setSplitBetween(members)}>
+                        ✅ Todos
+                      </button>
+
+                      <button type="button" disabled={isSettled} style={btn("ghost", isSettled)} onClick={() => setSplitBetween([])}>
+                        🧹 Limpiar
+                      </button>
+                    </div>
+
+                    <div style={{ marginBottom: 6, fontWeight: 800 }}>Se divide entre:</div>
+                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                      {members.map((m) => (
+                        <label key={m} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          <input
+                            type="checkbox"
+                            checked={splitBetween.includes(m)}
+                            onChange={() => toggleSplit(m)}
+                            disabled={isSettled}
+                          />
+                          {m}
+                        </label>
+                      ))}
+                    </div>
+
+                    {splitBetween.length === 0 && <p style={hint}>Selecciona al menos 1 persona.</p>}
+                  </div>
+                )}
+
+                <button onClick={handleAddExpense} disabled={!canAddExpense} style={btn("primary", !canAddExpense)}>
                   Agregar gasto
                 </button>
 
-                {!canAddExpense && (
-                  <p style={hint}>Completa todo para agregar un gasto.</p>
-                )}
+                {!canAddExpense && <p style={hint}>Completa todo para agregar un gasto.</p>}
               </div>
 
+              {/* LISTA */}
               <div style={{ marginTop: 14 }} />
 
               {expenses.length === 0 ? (
@@ -746,67 +824,38 @@ export default function GroupDetail() {
               ) : (
                 <div style={{ display: "grid", gap: 10, marginTop: 8 }}>
                   {expenses.map((e) => (
-                    <div key={e.id} style={expenseCard}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: 12,
-                        }}
-                      >
+                    <div
+                      key={e.id}
+                      style={{ ...expenseCard, cursor: "pointer" }}
+                      onClick={() => {
+                        setSplitExpense(e);
+                        setSplitInfoOpen(true);
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                         <div>
                           <div style={{ fontWeight: 900 }}>{e.description}</div>
-                          <div
-                            style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}
-                          >
+
+                          <div style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}>
                             🗓️ {formatDateTime(e.createdAt)}
                           </div>
-                          Pagó: <strong>{e.paidBy}</strong> · Split:{" "}
-                          <strong>
-                            {(e.splitBetween ?? []).join(", ") || "—"}
-                          </strong>
-                          <div style={{ marginTop: 6, fontWeight: 800 }}>
-                            {(() => {
-                              const split = Array.isArray(e.splitBetween)
-                                ? e.splitBetween
-                                : [];
-                              const totalMembers = members.length;
 
-                              // ⚖️ partes iguales entre todos
-                              if (
-                                split.length === totalMembers &&
-                                totalMembers > 0
-                              ) {
-                                return "⚖️ Se dividió en partes iguales entre todos.";
-                              }
-
-                              // 💸 alguien le debe TODO al que pagó
-                              if (split.length === 1 && split[0] !== e.paidBy) {
-                                return `💸 ${split[0]} le debe TODO a ${e.paidBy}.`;
-                              }
-
-                              // 📌 split personalizado
-                              if (split.length > 0) {
-                                return `📌 Se dividió entre: ${split.join(", ")}.`;
-                              }
-
-                              return "⚠️ No hay split seleccionado.";
-                            })()}
+                          <div style={{ marginTop: 6 }}>
+                            Pagó: <strong>{e.paidBy}</strong> · Split:{" "}
+                            <strong>{(e.splitBetween ?? []).join(", ") || "—"}</strong>
                           </div>
                         </div>
 
                         <div style={{ textAlign: "right" }}>
-                          <div style={{ fontWeight: 900, color: "#E5E7EB" }}>
-                            {formatMoney(e.amount)}
-                          </div>
+                          <div style={{ fontWeight: 900 }}>{formatMoney(e.amount)}</div>
 
                           <button
-                            onClick={() => handleDeleteExpense(e.id)}
-                            disabled={isSettled}
-                            style={{
-                              ...btn("danger", isSettled),
-                              marginTop: 6,
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              handleDeleteExpense(e.id);
                             }}
+                            disabled={isSettled}
+                            style={{ ...btn("danger", isSettled), marginTop: 6 }}
                           >
                             Eliminar
                           </button>
@@ -834,8 +883,8 @@ export default function GroupDetail() {
                   {balance === 0
                     ? "Sin deuda"
                     : balance > 0
-                      ? `Recibe ${formatMoney(balance)}`
-                      : `Debe ${formatMoney(Math.abs(balance))}`}
+                    ? `Recibe ${formatMoney(balance)}`
+                    : `Debe ${formatMoney(Math.abs(balance))}`}
                 </span>
               </li>
             ))}
@@ -843,20 +892,8 @@ export default function GroupDetail() {
         </div>
 
         {/* BUTTONS */}
-        <div
-          style={{
-            marginTop: 24,
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            alignItems: "flex-start",
-          }}
-        >
-          <button
-            onClick={handleSettle}
-            disabled={isSettled}
-            style={btn("warning", isSettled)}
-          >
+        <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 12 }}>
+          <button onClick={handleSettle} disabled={isSettled} style={btn("warning", isSettled)}>
             {isSettled ? "Grupo liquidado ✅" : "✅ Liquidar grupo"}
           </button>
 
@@ -871,6 +908,7 @@ export default function GroupDetail() {
           </button>
         </div>
 
+        {/* PAGOS SUGERIDOS */}
         <div style={{ ...card, marginTop: 18 }}>
           <h2 style={{ marginTop: 0 }}>Pagos sugeridos</h2>
 
@@ -880,8 +918,7 @@ export default function GroupDetail() {
             <ul>
               {settlements.map((p, idx) => (
                 <li key={idx}>
-                  <strong>{p.from}</strong> paga{" "}
-                  <strong>{formatMoney(p.amount)}</strong> a{" "}
+                  <strong>{p.from}</strong> paga <strong>{formatMoney(p.amount)}</strong> a{" "}
                   <strong>{p.to}</strong>
                 </li>
               ))}
@@ -889,9 +926,16 @@ export default function GroupDetail() {
           )}
         </div>
 
-        <div
-          style={{ marginTop: 24, display: "flex", justifyContent: "center" }}
-        >
+        {/* MODAL */}
+        <ExpenseSplitInfoModal
+          open={splitInfoOpen}
+          onClose={() => setSplitInfoOpen(false)}
+          expense={splitExpense}
+          members={members}
+          currentUser={currentUser}
+        />
+
+        <div style={{ marginTop: 24, display: "flex", justifyContent: "center" }}>
           <button onClick={() => navigate("/")} style={btn("ghost", false)}>
             ← Volver a Home
           </button>

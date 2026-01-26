@@ -13,7 +13,6 @@ import {
   arrayUnion,
   arrayRemove,
   deleteDoc,
-  getDoc,
 } from "firebase/firestore";
 
 // Colección principal
@@ -21,7 +20,8 @@ const groupsCol = collection(db, "groups");
 
 // Escuchar grupos en tiempo real
 export function listenGroups(callback) {
-  const q = query(groupsCol, orderBy("createdAt", "desc"));
+  // ✅ Ordenamos por createdAtMs (estable, nunca es null)
+  const q = query(groupsCol, orderBy("createdAtMs", "desc"));
 
   const unsub = onSnapshot(q, (snap) => {
     const groups = snap.docs.map((d) => {
@@ -33,6 +33,7 @@ export function listenGroups(callback) {
         expenses: Array.isArray(data.expenses) ? data.expenses : [],
         isSettled: !!data.isSettled,
         type: data.type ?? "other",
+        createdAtMs: Number(data.createdAtMs) || 0,
       };
     });
 
@@ -47,10 +48,13 @@ export async function createGroup({ name, type = "other" }) {
   const cleanName = (name || "").trim();
   if (!cleanName) throw new Error("Nombre de grupo vacío");
 
+  const now = Date.now();
+
   const docRef = await addDoc(groupsCol, {
     name: cleanName,
     type,
-    createdAt: serverTimestamp(),
+    createdAt: serverTimestamp(), // (para referencia humana en Firestore)
+    createdAtMs: now,            // ✅ para orden estable
     members: [],
     expenses: [],
     isSettled: false,
@@ -101,7 +105,8 @@ export async function addExpense(groupId, expense) {
 
   if (!description) throw new Error("Descripción vacía");
   if (!paidBy) throw new Error("Falta quién pagó");
-  if (!Number.isFinite(amountNum) || amountNum <= 0) throw new Error("Monto inválido");
+  if (!Number.isFinite(amountNum) || amountNum <= 0)
+    throw new Error("Monto inválido");
   if (splitBetween.length === 0) throw new Error("Split vacío");
 
   const ref = doc(db, "groups", groupId);
@@ -136,11 +141,9 @@ export async function addExpense(groupId, expense) {
   return payload.id;
 }
 
-
 /**
  * ✅ Importante:
- * No usamos arrayRemove(expenseObj) porque tiene que ser EXACTAMENTE igual al objeto guardado,
- * y a veces cambia el shape o falta algún campo.
+ * No usamos arrayRemove(expenseObj) porque tiene que ser EXACTAMENTE igual al objeto guardado.
  * Mejor borramos por ID (seguro).
  */
 export async function removeExpense(groupId, expenseOrId) {
@@ -162,7 +165,6 @@ export async function removeExpense(groupId, expenseOrId) {
     tx.update(ref, { expenses: next });
   });
 }
-
 
 // =========================
 // SETTLE / REOPEN
