@@ -1,7 +1,14 @@
 // src/pages/GroupDetail.jsx
 import ExpenseSplitInfoModal from "../components/ExpenseSplitInfoModal";
-import { ensureNotificationPermission, showNotification } from "../utils/notify";
-import { calculateBalances, settleBalances, formatMoney } from "../utils/balances";
+import {
+  ensureNotificationPermission,
+  showNotification,
+} from "../utils/notify";
+import {
+  calculateBalances,
+  settleBalances,
+  formatMoney,
+} from "../utils/balances";
 
 import { useParams, useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
@@ -30,8 +37,8 @@ const badgeStyle = (balance) => ({
     balance > 0
       ? "linear-gradient(135deg, #E8FFF1, #D1FAE5)"
       : balance < 0
-      ? "linear-gradient(135deg, #FFECEC, #FECACA)"
-      : "#F3F4F6",
+        ? "linear-gradient(135deg, #FFECEC, #FECACA)"
+        : "#F3F4F6",
   color: balance > 0 ? "#166534" : balance < 0 ? "#991B1B" : "#374151",
   border: "1px solid rgba(0,0,0,0.06)",
   boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
@@ -49,19 +56,23 @@ const inviteBtn = {
 
 const TYPE_THEME = {
   trip: {
-    gradient: "linear-gradient(135deg, rgba(186,230,253,0.18), rgba(224,242,254,0.05))",
+    gradient:
+      "linear-gradient(135deg, rgba(186,230,253,0.18), rgba(224,242,254,0.05))",
     soft: "rgba(186,230,253,0.08)",
   },
   home: {
-    gradient: "linear-gradient(135deg, rgba(187,247,208,0.18), rgba(220,252,231,0.05))",
+    gradient:
+      "linear-gradient(135deg, rgba(187,247,208,0.18), rgba(220,252,231,0.05))",
     soft: "rgba(187,247,208,0.08)",
   },
   couple: {
-    gradient: "linear-gradient(135deg, rgba(251,207,232,0.18), rgba(252,231,243,0.05))",
+    gradient:
+      "linear-gradient(135deg, rgba(251,207,232,0.18), rgba(252,231,243,0.05))",
     soft: "rgba(251,207,232,0.08)",
   },
   other: {
-    gradient: "linear-gradient(135deg, rgba(226,232,240,0.18), rgba(241,245,249,0.05))",
+    gradient:
+      "linear-gradient(135deg, rgba(226,232,240,0.18), rgba(241,245,249,0.05))",
     soft: "rgba(226,232,240,0.08)",
   },
 };
@@ -98,7 +109,7 @@ export default function GroupDetail() {
   const navigate = useNavigate();
 
   const group = useSelector((state) =>
-    (state.groups?.list ?? []).find((g) => String(g.id) === String(id))
+    (state.groups?.list ?? []).find((g) => String(g.id) === String(id)),
   );
 
   // UI anim
@@ -110,6 +121,8 @@ export default function GroupDetail() {
 
   // Members
   const [memberName, setMemberName] = useState("");
+
+  
 
   // Expenses form
   const [desc, setDesc] = useState("");
@@ -124,8 +137,35 @@ export default function GroupDetail() {
   const [splitInfoOpen, setSplitInfoOpen] = useState(false);
   const [splitExpense, setSplitExpense] = useState(null);
 
-  // "Quién soy yo" (por ahora fijo)
-  const currentUser = "Efra";
+
+  // ✅ derived data (safe even if group is undefined)
+const members = useMemo(
+  () => (Array.isArray(group?.members) ? group.members : []),
+  [group]
+);
+
+// ✅ currentUser por grupo (persistente)
+const LS_KEY = `sm:currentUser:${id}`;
+
+const [currentUser, setCurrentUser] = useState(() => {
+  return localStorage.getItem(LS_KEY) || "";
+});
+
+useEffect(() => {
+  if (currentUser) localStorage.setItem(LS_KEY, currentUser);
+  else localStorage.removeItem(LS_KEY);
+}, [currentUser, LS_KEY]);
+
+
+// Si el usuario ya no existe en miembros, reset
+useEffect(() => {
+  if (currentUser && !members.includes(currentUser)) {
+    setCurrentUser("");
+    localStorage.removeItem(LS_KEY);
+  }
+}, [members, currentUser, LS_KEY]);
+
+
 
   // ===== Helpers UI =====
   const btn = (variant = "primary", disabled = false) => {
@@ -211,16 +251,12 @@ export default function GroupDetail() {
     boxShadow: "0 12px 30px rgba(0,0,0,0.30)",
   };
 
-  // ✅ derived data (safe even if group is undefined)
-  const members = useMemo(
-    () => (Array.isArray(group?.members) ? group.members : []),
-    [group]
-  );
+ 
 
   const expenses = useMemo(() => {
     const list = [...(group?.expenses ?? [])];
     list.sort((a, b) =>
-      String(b?.createdAt || "").localeCompare(String(a?.createdAt || ""))
+      String(b?.createdAt || "").localeCompare(String(a?.createdAt || "")),
     );
     return list;
   }, [group]);
@@ -346,7 +382,10 @@ export default function GroupDetail() {
 
   const isSettled = !!group.isSettled;
 
-  const totalSpent = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  const totalSpent = expenses.reduce(
+    (sum, e) => sum + (Number(e.amount) || 0),
+    0,
+  );
   const totalMembers = members.length;
   const totalExpenses = expenses.length;
 
@@ -386,11 +425,17 @@ export default function GroupDetail() {
   };
 
   const toggleSplit = (m) => {
-    setSplitBetween((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]));
+    setSplitBetween((prev) =>
+      prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m],
+    );
   };
 
   const canAddExpense =
-    desc.trim() && Number(amount) > 0 && paidBy && splitBetween.length > 0 && !isSettled;
+    desc.trim() &&
+    Number(amount) > 0 &&
+    paidBy &&
+    splitBetween.length > 0 &&
+    !isSettled;
 
   const handleAddExpense = async () => {
     try {
@@ -424,7 +469,9 @@ export default function GroupDetail() {
   const handleSettle = async () => {
     if (isSettled) return;
 
-    const ok = confirm("¿Seguro que quieres liquidar este grupo? Ya NO podrás agregar nuevos gastos.");
+    const ok = confirm(
+      "¿Seguro que quieres liquidar este grupo? Ya NO podrás agregar nuevos gastos.",
+    );
     if (!ok) return;
 
     try {
@@ -455,7 +502,9 @@ export default function GroupDetail() {
   };
 
   const handleDeleteGroup = async () => {
-    const ok = confirm(`¿Eliminar el grupo "${group.name}"? Esta acción no se puede deshacer.`);
+    const ok = confirm(
+      `¿Eliminar el grupo "${group.name}"? Esta acción no se puede deshacer.`,
+    );
     if (!ok) return;
 
     try {
@@ -518,7 +567,14 @@ export default function GroupDetail() {
           <div style={{ position: "relative", zIndex: 1 }}>
             <h1 style={{ margin: 0 }}>Group Detail</h1>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                marginTop: 10,
+                flexWrap: "wrap",
+              }}
+            >
               <button
                 style={inviteBtn}
                 onClick={() => {
@@ -538,7 +594,9 @@ export default function GroupDetail() {
                     alert(`⚠️ ${r.reason}`);
                     return;
                   }
-                  showNotification("SplitMate 🔔", { body: "Notificación activada correctamente ✅" });
+                  showNotification("SplitMate 🔔", {
+                    body: "Notificación activada correctamente ✅",
+                  });
                   alert("✅ Notificaciones activadas");
                 }}
               >
@@ -575,12 +633,40 @@ export default function GroupDetail() {
               )}
             </div>
 
-            <div style={{ marginTop: 12, fontSize: 22, fontWeight: 900 }}>{group.name}</div>
+            <div style={{ marginTop: 12, fontSize: 22, fontWeight: 900 }}>
+              {group.name}
+            </div>
           </div>
         </div>
 
+        <div style={{ marginTop: 10 }}>
+          <label style={{ fontWeight: 800, marginRight: 8 }}>
+            ¿Quién eres?
+          </label>
+          <select
+            value={currentUser}
+            onChange={(e) => setCurrentUser(e.target.value)}
+            style={{ padding: "8px 10px", borderRadius: 10 }}
+          >
+            <option value="">Selecciona...</option>
+            {members.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+
+          {!currentUser && (
+            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>
+              Selecciona tu nombre para usar los presets “Tú”.
+            </div>
+          )}
+        </div>
+
         {/* STATS */}
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 10 }}>
+        <div
+          style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 10 }}
+        >
           <span
             style={{
               padding: "8px 12px",
@@ -633,7 +719,11 @@ export default function GroupDetail() {
               disabled={isSettled}
             />
 
-            <button onClick={handleAddMember} disabled={isSettled} style={btn("primary", isSettled)}>
+            <button
+              onClick={handleAddMember}
+              disabled={isSettled}
+              style={btn("primary", isSettled)}
+            >
               Agregar miembro
             </button>
           </div>
@@ -651,10 +741,16 @@ export default function GroupDetail() {
               >
                 <span style={{ fontWeight: 700 }}>
                   {m}
-                  <span style={badgeStyle(balances[m] ?? 0)}>{formatMoney(balances[m] ?? 0)}</span>
+                  <span style={badgeStyle(balances[m] ?? 0)}>
+                    {formatMoney(balances[m] ?? 0)}
+                  </span>
                 </span>
 
-                <button onClick={() => handleRemoveMember(m)} disabled={isSettled} style={btn("danger", isSettled)}>
+                <button
+                  onClick={() => handleRemoveMember(m)}
+                  disabled={isSettled}
+                  style={btn("danger", isSettled)}
+                >
                   Eliminar
                 </button>
               </li>
@@ -689,7 +785,14 @@ export default function GroupDetail() {
           ) : (
             <>
               {/* FORM */}
-              <div style={{ display: "grid", gap: 8, maxWidth: 520, marginTop: 10 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 8,
+                  maxWidth: 520,
+                  marginTop: 10,
+                }}
+              >
                 <input
                   value={desc}
                   onChange={(e) => setDesc(e.target.value)}
@@ -725,7 +828,14 @@ export default function GroupDetail() {
                 </div>
 
                 {/* Presets */}
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    flexWrap: "wrap",
+                    marginTop: 6,
+                  }}
+                >
                   <button
                     type="button"
                     disabled={isSettled || members.length < 2}
@@ -780,20 +890,46 @@ export default function GroupDetail() {
                 {/* Advanced split */}
                 {advancedSplitOpen && (
                   <div>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-                      <button type="button" disabled={isSettled} style={btn("ghost", isSettled)} onClick={() => setSplitBetween(members)}>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        flexWrap: "wrap",
+                        marginBottom: 8,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        disabled={isSettled}
+                        style={btn("ghost", isSettled)}
+                        onClick={() => setSplitBetween(members)}
+                      >
                         ✅ Todos
                       </button>
 
-                      <button type="button" disabled={isSettled} style={btn("ghost", isSettled)} onClick={() => setSplitBetween([])}>
+                      <button
+                        type="button"
+                        disabled={isSettled}
+                        style={btn("ghost", isSettled)}
+                        onClick={() => setSplitBetween([])}
+                      >
                         🧹 Limpiar
                       </button>
                     </div>
 
-                    <div style={{ marginBottom: 6, fontWeight: 800 }}>Se divide entre:</div>
+                    <div style={{ marginBottom: 6, fontWeight: 800 }}>
+                      Se divide entre:
+                    </div>
                     <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                       {members.map((m) => (
-                        <label key={m} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <label
+                          key={m}
+                          style={{
+                            display: "flex",
+                            gap: 6,
+                            alignItems: "center",
+                          }}
+                        >
                           <input
                             type="checkbox"
                             checked={splitBetween.includes(m)}
@@ -805,15 +941,23 @@ export default function GroupDetail() {
                       ))}
                     </div>
 
-                    {splitBetween.length === 0 && <p style={hint}>Selecciona al menos 1 persona.</p>}
+                    {splitBetween.length === 0 && (
+                      <p style={hint}>Selecciona al menos 1 persona.</p>
+                    )}
                   </div>
                 )}
 
-                <button onClick={handleAddExpense} disabled={!canAddExpense} style={btn("primary", !canAddExpense)}>
+                <button
+                  onClick={handleAddExpense}
+                  disabled={!canAddExpense}
+                  style={btn("primary", !canAddExpense)}
+                >
                   Agregar gasto
                 </button>
 
-                {!canAddExpense && <p style={hint}>Completa todo para agregar un gasto.</p>}
+                {!canAddExpense && (
+                  <p style={hint}>Completa todo para agregar un gasto.</p>
+                )}
               </div>
 
               {/* LISTA */}
@@ -832,22 +976,34 @@ export default function GroupDetail() {
                         setSplitInfoOpen(true);
                       }}
                     >
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 12,
+                        }}
+                      >
                         <div>
                           <div style={{ fontWeight: 900 }}>{e.description}</div>
 
-                          <div style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}>
+                          <div
+                            style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}
+                          >
                             🗓️ {formatDateTime(e.createdAt)}
                           </div>
 
                           <div style={{ marginTop: 6 }}>
                             Pagó: <strong>{e.paidBy}</strong> · Split:{" "}
-                            <strong>{(e.splitBetween ?? []).join(", ") || "—"}</strong>
+                            <strong>
+                              {(e.splitBetween ?? []).join(", ") || "—"}
+                            </strong>
                           </div>
                         </div>
 
                         <div style={{ textAlign: "right" }}>
-                          <div style={{ fontWeight: 900 }}>{formatMoney(e.amount)}</div>
+                          <div style={{ fontWeight: 900 }}>
+                            {formatMoney(e.amount)}
+                          </div>
 
                           <button
                             onClick={(ev) => {
@@ -855,7 +1011,10 @@ export default function GroupDetail() {
                               handleDeleteExpense(e.id);
                             }}
                             disabled={isSettled}
-                            style={{ ...btn("danger", isSettled), marginTop: 6 }}
+                            style={{
+                              ...btn("danger", isSettled),
+                              marginTop: 6,
+                            }}
                           >
                             Eliminar
                           </button>
@@ -883,8 +1042,8 @@ export default function GroupDetail() {
                   {balance === 0
                     ? "Sin deuda"
                     : balance > 0
-                    ? `Recibe ${formatMoney(balance)}`
-                    : `Debe ${formatMoney(Math.abs(balance))}`}
+                      ? `Recibe ${formatMoney(balance)}`
+                      : `Debe ${formatMoney(Math.abs(balance))}`}
                 </span>
               </li>
             ))}
@@ -892,8 +1051,19 @@ export default function GroupDetail() {
         </div>
 
         {/* BUTTONS */}
-        <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 12 }}>
-          <button onClick={handleSettle} disabled={isSettled} style={btn("warning", isSettled)}>
+        <div
+          style={{
+            marginTop: 24,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}
+        >
+          <button
+            onClick={handleSettle}
+            disabled={isSettled}
+            style={btn("warning", isSettled)}
+          >
             {isSettled ? "Grupo liquidado ✅" : "✅ Liquidar grupo"}
           </button>
 
@@ -918,7 +1088,8 @@ export default function GroupDetail() {
             <ul>
               {settlements.map((p, idx) => (
                 <li key={idx}>
-                  <strong>{p.from}</strong> paga <strong>{formatMoney(p.amount)}</strong> a{" "}
+                  <strong>{p.from}</strong> paga{" "}
+                  <strong>{formatMoney(p.amount)}</strong> a{" "}
                   <strong>{p.to}</strong>
                 </li>
               ))}
@@ -935,7 +1106,9 @@ export default function GroupDetail() {
           currentUser={currentUser}
         />
 
-        <div style={{ marginTop: 24, display: "flex", justifyContent: "center" }}>
+        <div
+          style={{ marginTop: 24, display: "flex", justifyContent: "center" }}
+        >
           <button onClick={() => navigate("/")} style={btn("ghost", false)}>
             ← Volver a Home
           </button>
